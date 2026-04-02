@@ -2,15 +2,15 @@ version = 2
 
 [[root]]
 alias = "std"
-package = "std@git+git@github.com:benjaminjellis/mond-std.git#1818def4a1c428e68e5d43e752744ed238d7ecd1"
+package = "std@git+git@github.com:benjaminjellis/mond-std.git#2b43bf695cf9bff1651a745decbaec5d22c56acc"
 git = "git@github.com:benjaminjellis/mond-std.git"
-branch = "push-ymoqokokoqqo"
+tag = "0.0.11"
 
 [[package]]
-id = "std@git+git@github.com:benjaminjellis/mond-std.git#1818def4a1c428e68e5d43e752744ed238d7ecd1"
+id = "std@git+git@github.com:benjaminjellis/mond-std.git#2b43bf695cf9bff1651a745decbaec5d22c56acc"
 name = "std"
 source = "git+git@github.com:benjaminjellis/mond-std.git"
 git = "git@github.com:benjaminjellis/mond-std.git"
-branch = "push-ymoqokokoqqo"
-resolved_rev = "1818def4a1c428e68e5d43e752744ed238d7ecd1"
+tag = "0.0.11"
+resolved_rev = "2b43bf695cf9bff1651a745decbaec5d22c56acc"
 dependencies = []
