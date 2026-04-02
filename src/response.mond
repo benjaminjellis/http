@@ -1,0 +1,134 @@
+(use std/result [Result])
+(use std/list)
+(use std/string)
+(use std/option [Option])
+(use cookie)
+(use http [Header header_name header_value])
+
+;;; A HTTP response with a parameterised body.
+;;; Header keys are expected to be lowercase.
+(pub type ['body] Response
+  [(:status ~ Int)
+   (:headers ~ (List Header))
+   (:body ~ 'body)])
+
+(pub let try_map {transform response}
+  (let? [body (transform (:body response))]
+    (Ok (set_body response body))))
+
+(pub let new {status}
+  (Response :status status :headers [] :body ""))
+
+(let collect_headers {headers key}
+  (match headers
+    [] ~> []
+    [header | rest] ~>
+      (match (= (header_name header) key)
+        True ~> (list/prepend (header_value header) (collect_headers rest key))
+        False ~> (collect_headers rest key))))
+
+(let set_header_in_list {headers header}
+  (match headers
+    [] ~> [header]
+    [current | rest] ~>
+      (match (= (header_name current) (header_name header))
+        True ~> (list/prepend header rest)
+        False ~> (list/prepend current (set_header_in_list rest header)))))
+
+(pub let describe_status_code {request}
+  (match (:status request)
+    100 ~> (option/Some "Continue")
+    101 ~> (option/Some "Switching Protocols")
+    102 ~> (option/Some "Processing")
+    103 ~> (option/Some "Early Hints")
+    200 ~> (option/Some "OK")
+    201 ~> (option/Some "Created")
+    202 ~> (option/Some "Accepted")
+    203 ~> (option/Some "Non-Authoritative Information")
+    204 ~> (option/Some "No Content")
+    205 ~> (option/Some "Reset Content")
+    206 ~> (option/Some "Partial Content")
+    300 ~> (option/Some "Multiple Choices")
+    301 ~> (option/Some "Moved Permanently")
+    302 ~> (option/Some "Found")
+    303 ~> (option/Some "See Other")
+    304 ~> (option/Some "Not Modified")
+    307 ~> (option/Some "Temporary Redirect")
+    308 ~> (option/Some "Permanent Redirect")
+    400 ~> (option/Some "Bad Request")
+    401 ~> (option/Some "Unauthorized")
+    403 ~> (option/Some "Forbidden")
+    404 ~> (option/Some "Not Found")
+    405 ~> (option/Some "Method Not Allowed")
+    406 ~> (option/Some "Not Acceptable")
+    408 ~> (option/Some "Request Timeout")
+    409 ~> (option/Some "Conflict")
+    410 ~> (option/Some "Gone")
+    412 ~> (option/Some "Precondition Failed")
+    413 ~> (option/Some "Content Too Large")
+    414 ~> (option/Some "URI Too Long")
+    415 ~> (option/Some "Unsupported Media Type")
+    418 ~> (option/Some "I'm a teapot")
+    422 ~> (option/Some "Unprocessable Content")
+    425 ~> (option/Some "Too Early")
+    426 ~> (option/Some "Upgrade Required")
+    429 ~> (option/Some "Too Many Requests")
+    431 ~> (option/Some "Request Header Fields Too Large")
+    451 ~> (option/Some "Unavailable For Legal Reasons")
+    500 ~> (option/Some "Internal Server Error")
+    501 ~> (option/Some "Not Implemented")
+    502 ~> (option/Some "Bad Gateway")
+    503 ~> (option/Some "Service Unavailable")
+    504 ~> (option/Some "Gateway Timeout")
+    505 ~> (option/Some "HTTP Version Not Supported")
+    _ ~> option/None))
+
+(pub let get_headers {response key}
+  (collect_headers (:headers response) (string/lowercase key)))
+
+(pub let set_header {header response}
+  (let [normalised (Header
+          :name (string/lowercase (header_name header))
+          :value (header_value header))]
+    (with response
+      :headers (set_header_in_list (:headers response) normalised))))
+
+(pub let prepend_header {header response}
+  (let [new_headers (list/prepend header (:headers response))]
+    (with response
+      :headers new_headers)))
+
+(pub let set_body {body response}
+  (with response
+    :body body))
+
+(pub let map {transform response}
+  (|> (:body response)
+      transform
+      (set_body _ response)))
+
+(pub let redirect {uri}
+  (Response
+    :status 303
+    :headers [(Header :name "location" :value uri)]
+    :body (string/concat "You are being redirected to " uri)))
+
+(let map_cookies {header}
+  (match header
+    (Header :name "set-cookie" :value x) ~> (cookie/parse x)
+    _ ~> []))
+
+(pub let get_cookies {response}
+  (let [headers (:headers response)]
+    (list/flat_map map_cookies headers)))
+
+(pub let set_cookie {response name value attributes}
+  (let [header (Header
+          :name "set-cookie"
+          :value (cookie/set_header name value attributes))]
+    (prepend_header header response)))
+
+(pub let expire_cookie {response name attributes}
+  (let [attrs (with attributes
+          :max_age (Some 0))]
+    (set_cookie response name "" attrs)))

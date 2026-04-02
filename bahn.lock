@@ -1,0 +1,16 @@
+version = 2
+
+[[root]]
+alias = "std"
+package = "std@git+git@github.com:benjaminjellis/mond-std.git#1818def4a1c428e68e5d43e752744ed238d7ecd1"
+git = "git@github.com:benjaminjellis/mond-std.git"
+branch = "push-ymoqokokoqqo"
+
+[[package]]
+id = "std@git+git@github.com:benjaminjellis/mond-std.git#1818def4a1c428e68e5d43e752744ed238d7ecd1"
+name = "std"
+source = "git+git@github.com:benjaminjellis/mond-std.git"
+git = "git@github.com:benjaminjellis/mond-std.git"
+branch = "push-ymoqokokoqqo"
+resolved_rev = "1818def4a1c428e68e5d43e752744ed238d7ecd1"
+dependencies = []

@@ -1,0 +1,205 @@
+(use std/option [Option])
+(use lib [scheme_to_string])
+(use std/result [Result])
+(use std/result)
+(use std/list)
+(use std/string)
+(use std/pair)
+(use std/uri [Uri])
+(use std/uri)
+(use cookie)
+(use http [Header Method Scheme header_name header_value])
+
+;;; A HTTP request with a parameterised body.
+;;; Header keys are expected to be lowercase.
+(pub type ['body] Request
+  [(:method ~ Method)
+   (:headers ~ (List Header))
+   (:body ~ 'body)
+   (:scheme ~ Scheme)
+   (:host ~ String)
+   (:port ~ (Option Int))
+   (:path ~ String)
+   (:query ~ (Option String))])
+
+(pub let to_uri {request}
+  (Uri
+    :scheme (Some (scheme_to_string (:scheme request)))
+    :userinfo None
+    :host (Some (:host request))
+    :port (:port request)
+    :path (:path request)
+    :query (:query request)
+    :fragment None))
+
+(pub let from_uri {uri}
+  (let? [scheme (|> (:scheme uri)
+                    (option/unwrap_or "")
+                    lib/scheme_from_string)
+         host (|> (:host uri)
+                  (option/to_result ()))]
+    (Ok
+      (Request
+        :method Get
+        :host host
+        :scheme scheme
+        :headers []
+        :port (:port uri)
+        :body ""
+        :query (:query uri)
+        :path (:path uri)))))
+
+(let collect_headers {headers key}
+  (match headers
+    [] ~> []
+    [header | rest] ~>
+      (match (= (header_name header) key)
+        True ~> (list/prepend (header_value header) (collect_headers rest key))
+        False ~> (collect_headers rest key))))
+
+(pub let get_headers {key request}
+  (collect_headers (:headers request) (string/lowercase key)))
+
+(pub let set_header {header request}
+  (let [updated_headers (list/append header (:headers request))]
+    (with request
+      :headers updated_headers)))
+
+(pub let prepend_header {header request}
+  (let [updated_headers (list/prepend header (:headers request))]
+    (with request
+      :headers updated_headers)))
+
+(pub let set_body {body request}
+  (with request
+    :body body))
+
+(pub let map {transform request}
+  (|> (:body request)
+      transform
+      (set_body _ request)))
+
+(pub let path_segments {request}
+  (|> (:path request)
+      uri/path_segments))
+
+(pub let get_query {request}
+  (let [query (:query request)]
+    (match query
+      (Some query_string) ~> (uri/parse_query query_string)
+      None ~> (Ok []))))
+
+(let build_query {pair}
+  (let [key (pair/first pair)
+        value (pair/second pair)
+        encoded_key (uri/percent_encode key)
+        encoded_value (uri/percent_encode value)]
+    (string/concat (string/concat encoded_key "=") encoded_value)))
+
+(pub let set_query {query request}
+  (let [encoded (|> query
+                    (list/map build_query)
+                    (string/join "&")
+                    Some)]
+    (with request
+      :query encoded)))
+
+(pub let set_method {method request}
+  (with request
+    :method method))
+
+(pub let new {}
+  (Request
+    :method Get
+    :headers []
+    :body ""
+    :scheme Https
+    :host "localhost"
+    :port None
+    :path ""
+    :query None))
+
+(pub let to {url}
+  (|> url
+      uri/parse
+      (result/try from_uri)))
+
+(pub let set_scheme {scheme request}
+  (with request
+    :scheme scheme))
+
+(pub let set_host {host request}
+  (with request
+    :host host))
+
+(pub let set_port {port request}
+  (with request
+    :port port))
+
+(pub let set_path {path request}
+  (with request
+    :path path))
+
+(let format_cookie_pair {cookie}
+  (string/concat (string/concat (header_name cookie) "=") (header_value cookie)))
+
+(let collect_cookies {headers}
+  (match headers
+    [] ~> []
+    [header | rest] ~>
+      (match (= (header_name header) "cookie")
+        True ~> (list/concat
+                  (cookie/parse (header_value header))
+                  (collect_cookies rest))
+        False ~> (collect_cookies rest))))
+
+(pub let set_cookie {request name value}
+  (let [cookies_and_headers (list/pop_first
+          (f {header} -> (= (header_name header) "cookie"))
+          (:headers request))
+        cookie_string (match (pair/first cookies_and_headers)
+          (Some cookie_header) ~> (header_value cookie_header)
+          None ~> "")
+        headers (pair/second cookies_and_headers)
+        cookies (|> (cookie/parse cookie_string)
+                    (list/upsert_first
+                      (f {cookie_pair} -> (= (header_name cookie_pair) name))
+                      (Header :name name :value value))
+                    (list/map format_cookie_pair)
+                    (string/join "; "))]
+    (with request
+      :headers (list/prepend (Header :name "cookie" :value cookies) headers))))
+
+;;; Fetch the cookies sent in a request.
+;;; Badly formed cookie pairs are ignored.
+(pub let get_cookies {request}
+  (collect_cookies (:headers request)))
+
+;;; Remove a cookie from a request.
+;;; If no cookie header is found, the request is returned unchanged.
+(pub let remove_cookie {request name}
+  (let [cookies_and_headers (list/pop_first
+          (f {header} -> (= (header_name header) "cookie"))
+          (:headers request))]
+    (match (pair/first cookies_and_headers)
+      None ~> request
+      (Some cookie_header) ~> (let [headers (pair/second cookies_and_headers)
+                                    new_cookie_string (|> (cookie/parse
+                                                            (header_value
+                                                              cookie_header))
+                                                          (list/filter_map (f {cookie_pair} ->
+                                                            (match (=
+                                                              (header_name
+                                                                cookie_pair)
+                                                              name)
+                                                              True ~> (Error ())
+                                                              False ~> (Ok
+                                                                         (format_cookie_pair
+                                                                           cookie_pair)))))
+                                                          (string/join "; "))]
+                                (with request
+                                  :headers (list/prepend
+                                    (Header
+                                      :name "cookie"
+                                      :value new_cookie_string)
+                                    headers))))))

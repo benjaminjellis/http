@@ -1,0 +1,13 @@
+(use request [Request])
+(use response [Response])
+
+(pub extern let map_response_body ~ (((Request 'in) -> (Response 'before))
+  -> ('before -> 'after)
+  -> ((Request 'in) -> (Response 'after))) mond_http_bridge/service_map_response_body)
+
+(pub extern let prepend_response_header ~ (((Request 'in) -> (Response 'out))
+  -> String
+  -> String
+  -> ((Request 'in) -> (Response 'out))) mond_http_bridge/service_prepend_response_header)
+
+(pub extern let method_override ~ (((Request 'in) -> 'out) -> ((Request 'in) -> 'out)) mond_http_bridge/service_method_override)

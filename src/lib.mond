@@ -1,0 +1,60 @@
+(use std/bit_array [BitArray])
+(use std/result [Result])
+
+(pub type Method
+  [Get
+   Post
+   Head
+   Put
+   Delete
+   Trace
+   Connect
+   Options
+   Patch
+   (Other ~ String)])
+
+(pub type Scheme
+  [Http
+   Https])
+
+(pub let scheme_to_string {scheme}
+  (match scheme
+    Http ~> "http"
+    Https ~> "https"))
+
+;;; A HTTP header key/value pair.
+(pub type Header
+  [(:name ~ String)
+   (:value ~ String)])
+
+;;; Opaque multipart parsing continuation/result type from the Erlang runtime parser.
+(pub extern type MultipartHeaders)
+
+;;; Opaque multipart body continuation/result type from the Erlang runtime parser.
+(pub extern type MultipartBody)
+
+;;; Parsed Content-Disposition header value.
+(pub type ContentDisposition
+  [(:disposition ~ String)
+   (:parameters ~ (List Header))])
+
+(pub let header {name value}
+  (Header :name name :value value))
+
+(pub let header_name {header}
+  (:name header))
+
+(pub let header_value {header}
+  (:value header))
+
+(pub extern let parse_method ~ (String -> (Result Method Unit)) mond_http_bridge/http_parse_method)
+(pub extern let method_to_string ~ (Method -> String) mond_http_bridge/http_method_to_string)
+(pub extern let scheme_from_string ~ (String -> (Result Scheme Unit)) mond_http_bridge/http_scheme_from_string)
+(pub extern let parse_multipart_headers ~ (BitArray
+  -> String
+  -> (Result MultipartHeaders Unit)) mond_http_bridge/http_parse_multipart_headers)
+(pub extern let parse_multipart_body ~ (BitArray
+  -> String
+  -> (Result MultipartBody Unit)) mond_http_bridge/http_parse_multipart_body)
+(pub extern let parse_content_disposition ~ (String
+  -> (Result ContentDisposition Unit)) mond_http_bridge/http_parse_content_disposition)

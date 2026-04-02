@@ -1,0 +1,120 @@
+(use std/option)
+(use http [Scheme Header])
+(use std/string)
+(use std/list)
+(use std/result [Result])
+
+(pub type SameSitePolicy
+  [Lax
+   Strict
+   None])
+
+(let same_site_to_string {policy}
+  (match policy
+    Lax ~> "Lax"
+    Strict ~> "Strict"
+    None ~> "None"))
+
+(pub type Attributes
+  [(:max_age ~ (option/Option Int))
+   (:domain ~ (option/Option String))
+   (:path ~ (option/Option String))
+   (:secure ~ Bool)
+   (:http_only ~ Bool)
+   (:same_site ~ (option/Option SameSitePolicy))])
+
+(pub let defaults {scheme}
+  (Attributes
+    :max_age option/None
+    :domain option/None
+    :path option/None
+    :secure (= scheme Https)
+    :http_only True
+    :same_site (option/Some Lax)))
+
+(let epoch {}
+  "Expires=Thu, 01 Jan 1970 00:00:00 GMT")
+
+(pub extern let int_to_string ~ (Int -> String) erlang/integer_to_binary)
+
+(let cookie_attributes_to_list {attributes}
+  (let [max_age (:max_age attributes)
+        domain (:domain attributes)
+        path (:path attributes)
+        secure (:secure attributes)
+        http_only (:http_only attributes)
+        same_site (:same_site attributes)]
+    (|> [(match max_age
+           (option/Some 0) ~> (option/Some (epoch))
+           _ ~> option/None)
+         (option/map
+           (f {max_age} ->
+             (option/Some (string/concat "Max-Age=" (int_to_string max_age))))
+           max_age)
+         (option/map
+           (f {domain} -> (option/Some (string/concat "Domain=" domain)))
+           domain)
+         (option/map
+           (f {path} -> (option/Some (string/concat "Path=" path)))
+           path)
+         (match secure
+           True ~> (option/Some "Secure")
+           False ~> option/None)
+         (match http_only
+           True ~> (option/Some "HttpOnly")
+           False ~> option/None)
+         (option/map
+           (f {same_site} ->
+             (option/Some
+               (string/concat "SameSite=" (same_site_to_string same_site))))
+           same_site)]
+        (list/filter_map (f {attribute} -> (option/to_result () attribute))))))
+
+(pub let set_header {name value attributes}
+  (|> (string/concat (string/concat name "=") value)
+      (list/prepend _ (cookie_attributes_to_list attributes))
+      (string/join "; ")))
+
+(let check_token {token}
+  (let [has_invalid_char (or
+          (string/contains token " ")
+          (or
+            (string/contains token "\t")
+            (or
+              (string/contains token "\r")
+              (or (string/contains token "\n") (string/contains token "\f")))))]
+    (match has_invalid_char
+      True ~> (Error ())
+      False ~> (Ok ()))))
+
+(let split_cookie_pairs {cookie_string}
+  (|> (string/split cookie_string ";")
+      (list/map (f {pair} -> (string/split pair ",")))
+      list/flatten))
+
+(let parse_cookie_pair {pair}
+  (let [parts (|> pair
+                  string/trim
+                  (string/split _ "="))]
+    (match parts
+      [] ~> (Error ())
+      [_] ~> (Error ())
+      [key | value_parts] ~>
+        (match (= key "")
+          True ~> (Error ())
+          False ~> (let [trimmed_key (string/trim key)
+                         trimmed_value (|> (string/join "=" value_parts)
+                                           string/trim)]
+                     (match (check_token trimmed_key)
+                       (Error _) ~> (Error ())
+                       (Ok _) ~>
+                         (match (check_token trimmed_value)
+                           (Error _) ~> (Error ())
+                           (Ok _) ~> (Ok
+                                       (Header
+                                         :name trimmed_key
+                                         :value trimmed_value)))))))))
+
+(pub let parse {cookie_string}
+  (|> (split_cookie_pairs cookie_string)
+      (list/filter_map parse_cookie_pair)))
