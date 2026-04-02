@@ -1,5 +1,4 @@
 (use std/option [Option])
-(use lib [scheme_to_string])
 (use std/result [Result])
 (use std/result)
 (use std/list)
@@ -8,7 +7,7 @@
 (use std/uri [Uri])
 (use std/uri)
 (use cookie)
-(use http [Header Method Scheme header_name header_value])
+(use http [Header Method Scheme header_name header_value scheme_to_string])
 
 ;;; A HTTP request with a parameterised body.
 ;;; Header keys are expected to be lowercase.
@@ -35,7 +34,7 @@
 (pub let from_uri {uri}
   (let? [scheme (|> (:scheme uri)
                     (option/unwrap_or "")
-                    lib/scheme_from_string)
+                    http/scheme_from_string)
          host (|> (:host uri)
                   (option/to_result ()))]
     (Ok
