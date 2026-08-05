@@ -3,6 +3,7 @@
 (use std/string)
 (use std/option [Option])
 (use cookie)
+(use http)
 (use http [Header header_name header_value])
 
 ;;; A HTTP response with a parameterised body.
@@ -115,7 +116,7 @@
 
 (let map_cookies {header}
   (match header
-    (Header :name "set-cookie" :value x) ~> (cookie/parse x)
+    (http/Header :name "set-cookie" :value x) ~> (cookie/parse x)
     _ ~> []))
 
 (pub let get_cookies {response}
